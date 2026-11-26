@@ -1,0 +1,68 @@
+name: Publish XuetangX userscript
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - xuetangx-homework-exporter.user.js
+      - scripts/**
+      - test/**
+      - package.json
+      - package-lock.json
+      - .github/workflows/release-userscript.yml
+  workflow_dispatch:
+
+concurrency:
+  group: xuetangx-userscript-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts
+      - id: package
+        run: npm run build:release
+      - run: npm run test:release
+      - name: Publish verified files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.package.outputs.tag }}
+        shell: bash
+        run: |
+          assets=(dist/xuetangx-homework-exporter.meta.js dist/xuetangx-homework-exporter.user.js)
+          draft=$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft 2>/dev/null || true)
+          case "$draft" in
+            true)
+              target=$(gh release view "$RELEASE_TAG" --json targetCommitish --jq .targetCommitish)
+              if [[ "$target" != "$GITHUB_SHA" ]]; then
+                echo "This draft belongs to another commit. Increase the userscript version." >&2
+                exit 1
+              fi
+              gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+              gh release edit "$RELEASE_TAG" --draft=false
+              ;;
+            false)
+              published=$(mktemp -d)
+              gh release download "$RELEASE_TAG" --pattern 'xuetangx-homework-exporter.*.js' --dir "$published"
+              for file in "${assets[@]}"; do
+                if ! cmp -s "$file" "$published/${file##*/}"; then
+                  echo "Published files differ. Increase the userscript version to release changes." >&2
+                  exit 1
+                fi
+              done
+              ;;
+            *)
+              gh release create "$RELEASE_TAG" "${assets[@]}" --target "$GITHUB_SHA" --title "$RELEASE_TAG" --generate-notes
+              ;;
+          esac

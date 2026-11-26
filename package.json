@@ -1,0 +1,12 @@
+{
+  "name": "xuetangx-homework-exporter",
+  "private": true,
+  "scripts": {
+    "test": "node --check xuetangx-homework-exporter.user.js && node test/exporter.test.cjs xuetangx-homework-exporter.user.js",
+    "build:release": "node scripts/build-release.mjs",
+    "test:release": "node --check dist/xuetangx-homework-exporter.user.js && node test/exporter.test.cjs dist/xuetangx-homework-exporter.user.js"
+  },
+  "devDependencies": {
+    "jsdom": "31.0.0"
+  }
+}
