@@ -209,6 +209,26 @@ test('无法打开的作业列在合并文件中，已完成的作业仍可下�
   assert.match(text, /## 未导出的作业\s+- 期中作业/);
 });
 
+test('切换作业后首次翻页无效时重试并保留连续题号', async context => {
+  const exercise = buildExercise(context);
+  installCourseMenu(exercise);
+  const { document } = exercise;
+  const next = document.querySelector('.tabbar > i.right');
+  const advance = next.onclick;
+  let attempts = 0;
+  next.onclick = () => {
+    if (document.querySelector('.unit-title').textContent === '测试二' && ++attempts === 1) return;
+    advance();
+  };
+
+  await exercise.click('course');
+  const [{ text }] = await exercise.readDownloads();
+  assert.match(text, /已导出 3\/3 份作业，共 6 题/);
+  const secondAssignment = text.split('## 第二章 · 测试二')[1].split('\n## 期中作业')[0];
+  assert.deepEqual([...secondAssignment.matchAll(/^### (\d+)\./gm)].map(match => Number(match[1])), [1, 2]);
+  assert.equal(attempts, 2);
+});
+
 test('题号先变化、题干稍后加载时，导出等待新的题干', async context => {
   const exercise = buildExercise(context, { nextDelay: 1600 });
   await exercise.click('scan');

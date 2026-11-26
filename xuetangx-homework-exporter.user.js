@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         学堂在线作业导出
 // @namespace    https://www.xuetangx.com/
-// @version      0.3.1
+// @version      0.3.2
 // @description  一键合并导出学堂在线各章作业题目；支持单份作业 Markdown、JSON 与打印/PDF。
 // @author       Codex
 // @match        https://www.xuetangx.com/learn/space/*/*/*/exercise/*
@@ -11,7 +11,7 @@
 // ==/UserScript==
 (function () {
   'use strict';
-  const VERSION = '0.3.1';
+  const VERSION = '0.3.2';
   const S = { busy: false, data: null, logs: [] };
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -103,12 +103,22 @@
     while (currentIndex() !== target) {
       const current = currentIndex();
       const backward = target < current;
-      const control = $(backward ? '.tabbar > i:first-of-type' : '.tabbar > i:last-of-type');
-      if (!control) return false;
+      const selector = backward ? '.tabbar > i:first-of-type' : '.tabbar > i:last-of-type';
       const previous = questionView();
       const next = current + (backward ? -1 : 1);
-      control.click();
-      if (!(await waitForQuestion(() => location.href === page && currentIndex() === next, previous, 7000))) return false;
+      const atNextPage = () => location.href === page && currentIndex() === next;
+      let loaded = false;
+      for (let attempt = 0; attempt < 2 && !loaded; attempt++) {
+        // XuetangX can ignore the first arrow click after an assignment switch.
+        // Retry only if the original question is still open.
+        if (location.href !== page || currentIndex() !== current) return false;
+        const control = $(selector);
+        if (!control) return false;
+        if (attempt) log(`第 ${current} 题仍在显示，重试翻到第 ${next} 题`);
+        control.click();
+        loaded = await waitForQuestion(atNextPage, previous, 7000);
+      }
+      if (!loaded) return false;
     }
     return true;
   }
